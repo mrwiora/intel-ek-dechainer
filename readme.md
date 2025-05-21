@@ -36,24 +36,27 @@ Variable chain from TPM - needs to be extracted each time from the TPM. I use th
 The properties seem to be identical, but the Authorities itself will vary for sure, why it doesn't make sense to note them here
 
 ### Intermediate 3
-
+```
 Issuer: OU=On Die CSME P_MCC 00001881 Issuing CA, CN=www.intel.com
 Subject: CN=CSME MCC ROM CA
 CRL: https://tsci.intel.com/content/OnDieCA/crls/MCC_00001881_OnDie_CA.crl
+```
 
 ### Intermediate 4
-
+```
 Issuer: CN=CSME MCC ROM CA
 Subject: CN=CSME MCC SVN01 Kernel CA
 CRL: https://tsci.intel.com/content/OnDieCA/crls/OnDie_CA_CSME_Indirect.crl
 CRL Issuer:  DirName:OU = OnDie CA CSME Intermediate CA, CN = www.intel.com
+```
 
 ### Intermediate 5
-
+``` 
 Issuer: CN=CSME MCC SVN01 Kernel CA
 Subject: CN=CSME MCC PTT 01SVN
 CRL: https://tsci.intel.com/content/OnDieCA/crls/OnDie_CA_CSME_Indirect.crl
 CRL Issuer: DirName:OU = OnDie CA CSME Intermediate CA, CN = www.intel.com
+```
 
 # Instructions
 
