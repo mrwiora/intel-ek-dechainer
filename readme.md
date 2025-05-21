@@ -68,14 +68,12 @@ As the delimiter is "3082", followed by 2 bytes containing the size of the next 
 
 When you now exported your EK certificate:
 `tpm2_getekcertificate > intel-ek.der`
-which just for the completeness we convert to base64 pem format too.
-`openssl x509 -in intel-ek.der -outform PEM -out intel-ek.pem`
 
 You should be able to successfully verify the chain:
-`openssl verify -show_chain -trusted intel-root.pem -untrusted intel-int1.pem -untrusted intel-int2.pem -untrusted intel-int3.pem -untrusted intel-int4.pem -untrusted intel-int5.pem intel-ek.pem`
+`openssl verify -show_chain -trusted intel-root.der -untrusted intel-int1.der -untrusted intel-int2.der -untrusted intel-int3.der -untrusted intel-int4.der -untrusted intel-int5.der intel-ek.der`
 the result should look like this:
 ```
-intel-ek.pem: OK
+intel-ek.der: OK
 Chain:
 depth=0:  (untrusted)
 depth=1: CN=CSME MCC PTT  01SVN (untrusted)

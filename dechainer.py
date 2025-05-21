@@ -3,17 +3,24 @@ import os
 import sys
 import argparse
 import subprocess
+import shutil
 
-def extract_certificates(input_file, output_dir=None, base_name_prefix="intel-int", start_index=3):
+def check_openssl_available():
+    """Check if the OpenSSL command is available on the system."""
+    return shutil.which("openssl") is not None
+
+def extract_certificates(input_file, output_dir=None, base_name_prefix="intel-int", 
+                         start_index=3, convert_to_pem=False):
     """
     Extract individual certificates from a DER chain file, save them with sequentially numbered names,
-    and convert them to PEM format using OpenSSL
+    and optionally convert them to PEM format using OpenSSL
     
     Args:
         input_file: Path to the input DER chain file
         output_dir: Directory to save extracted certificates (if None, use current directory)
         base_name_prefix: Prefix for certificate filenames
         start_index: Starting index for certificate numbering (first certificate will be {prefix}{start_index})
+        convert_to_pem: Whether to convert the DER certificates to PEM format (requires OpenSSL)
     """
     # Set output directory to current directory if not specified
     if output_dir is None:
@@ -22,6 +29,13 @@ def extract_certificates(input_file, output_dir=None, base_name_prefix="intel-in
         # Create output directory if it doesn't exist
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+    
+    # Check if OpenSSL is available if PEM conversion is requested
+    if convert_to_pem:
+        openssl_available = check_openssl_available()
+        if not openssl_available:
+            print("Warning: OpenSSL command not found. PEM conversion will be skipped.")
+            convert_to_pem = False
     
     # Read the input file
     with open(input_file, 'rb') as f:
@@ -86,12 +100,12 @@ def extract_certificates(input_file, output_dir=None, base_name_prefix="intel-in
         i += 1
     
     # Extract and save each certificate
+    extracted_files = []
     for idx, (start, size) in enumerate(cert_positions):
         cert_index = start_index + idx
         base_name = f"{base_name_prefix}{cert_index}"
         
         der_file = os.path.join(output_dir, f"{base_name}.der")
-        pem_file = os.path.join(output_dir, f"{base_name}.pem")
         
         cert_data = data[start:start + size]
         
@@ -99,35 +113,39 @@ def extract_certificates(input_file, output_dir=None, base_name_prefix="intel-in
         with open(der_file, 'wb') as f:
             f.write(cert_data)
         
+        extracted_files.append(der_file)
         print(f"Extracted certificate {idx + 1} ({size} bytes) to {der_file}")
         
-        # Convert to PEM using OpenSSL
-        try:
-            # Using OpenSSL to convert DER to PEM
-            cmd = ["openssl", "x509", "-inform", "DER", "-in", der_file, "-outform", "PEM", "-out", pem_file]
+        # Convert to PEM using OpenSSL if explicitly requested
+        if convert_to_pem:
+            pem_file = os.path.join(output_dir, f"{base_name}.pem")
+            convert_success = False
             
-            # Run the command
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            
-            # Check if the command was successful
-            if result.returncode == 0:
-                print(f"Converted to PEM format: {pem_file}")
-            else:
-                print(f"Error converting to PEM: {result.stderr}")
+            try:
+                # First try with explicit formats
+                cmd = ["openssl", "x509", "-inform", "DER", "-in", der_file, "-outform", "PEM", "-out", pem_file]
+                result = subprocess.run(cmd, capture_output=True, text=True)
                 
-                # Try alternative command if the certificate is not recognized as X.509
-                alt_cmd = ["openssl", "x509", "-in", der_file, "-out", pem_file]
-                alt_result = subprocess.run(alt_cmd, capture_output=True, text=True)
-                
-                if alt_result.returncode == 0:
-                    print(f"Converted to PEM format (using alternate command): {pem_file}")
+                if result.returncode == 0:
+                    extracted_files.append(pem_file)
+                    print(f"Converted to PEM format: {pem_file}")
+                    convert_success = True
                 else:
-                    print(f"Failed to convert using alternate command: {alt_result.stderr}")
+                    # Try simpler command as fallback
+                    alt_cmd = ["openssl", "x509", "-in", der_file, "-out", pem_file]
+                    alt_result = subprocess.run(alt_cmd, capture_output=True, text=True)
                     
-        except Exception as e:
-            print(f"Error running OpenSSL command: {str(e)}")
+                    if alt_result.returncode == 0:
+                        extracted_files.append(pem_file)
+                        print(f"Converted to PEM format (using alternate command): {pem_file}")
+                        convert_success = True
+                    else:
+                        print(f"Failed to convert to PEM. Error: {alt_result.stderr}")
+                
+            except Exception as e:
+                print(f"Error running OpenSSL command: {str(e)}")
     
-    return len(cert_positions)
+    return len(cert_positions), extracted_files
 
 def main():
     parser = argparse.ArgumentParser(description='Extract certificates from a DER chain file')
@@ -138,6 +156,8 @@ def main():
                         help='Prefix for certificate filenames (default: intel-int)')
     parser.add_argument('-s', '--start-index', type=int, default=3, 
                         help='Starting index for certificate numbering (default: 3)')
+    parser.add_argument('--pem', action='store_true',
+                        help='Also convert certificates to PEM format (requires OpenSSL)')
     
     args = parser.parse_args()
     
@@ -146,11 +166,19 @@ def main():
         return 1
     
     try:
-        count = extract_certificates(args.input_file, args.output_dir, args.prefix, args.start_index)
+        count, files = extract_certificates(
+            args.input_file, 
+            args.output_dir, 
+            args.prefix, 
+            args.start_index,
+            convert_to_pem=args.pem
+        )
+        
         if count > 0:
-            print(f"Successfully extracted {count} certificates")
-            for i in range(count):
-                print(f"  {args.prefix}{args.start_index + i}")
+            print(f"\nSummary: Successfully extracted {count} certificates")
+            print("Generated files:")
+            for file in files:
+                print(f"  {os.path.basename(file)}")
         else:
             print("No certificates found in the input file")
     except Exception as e:
